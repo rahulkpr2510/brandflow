@@ -1,0 +1,388 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../lib/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+/// ---------- ENUMS ----------
+enum Role {
+  OWNER
+  ADMIN
+  EDITOR
+  VIEWER
+}
+
+enum SocialProvider {
+  TWITTER
+  INSTAGRAM
+  FACEBOOK
+  LINKEDIN
+  YOUTUBE
+  TIKTOK
+  PINTEREST
+  OTHER
+}
+
+enum PostStatus {
+  DRAFT
+  SCHEDULED
+  PUBLISHED
+  FAILED
+  ARCHIVED
+}
+
+enum GenerationType {
+  CAPTION
+  IMAGE
+  VARIANT
+  HASHTAGS
+  SUMMARY
+  OTHER
+}
+
+enum ModelProvider {
+  OPENAI
+  GEMINI
+  OTHER
+}
+
+enum MetricType {
+  IMPRESSIONS
+  REACH
+  LIKES
+  COMMENTS
+  SHARES
+  CLICKS
+  SAVES
+  VIDEO_VIEWS
+  CTR
+  ENGAGEMENT_RATE
+}
+
+enum Plan {
+  FREE
+  GROWTH
+  ENTERPRISE
+}
+
+enum CreditEventType {
+  GRANT // admin/system adds credits
+  CONSUME // AI generation uses credits
+  REFUND // refund/rollback
+  EXPIRE // expiration
+}
+
+/// ---------- CORE MULTI-TENANT ----------
+model Tenant {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String
+  slug      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Billing
+  plan                 Plan    @default(FREE)
+  stripeCustomerId     String? @unique
+  stripeSubscriptionId String?
+
+  // Relations
+  memberships    Membership[]
+  workspaces     Workspace[]
+  socialAccounts SocialAccount[]
+  campaigns      Campaign[]
+  posts          Post[]
+  mediaAssets    MediaAsset[]
+  generations    Generation[]
+  analytics      AnalyticsPoint[]
+  activityLogs   ActivityLog[]
+  creditLedger   CreditLedger[]
+  apiKeys        ApiKey[]
+  invitations    Invitation[]
+}
+
+model Workspace {
+  id        String   @id @default(uuid()) @db.Uuid
+  tenantId  String   @db.Uuid
+  name      String
+  color     String? // for UI accent
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant    Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  campaigns Campaign[]
+  posts     Post[]
+  media     MediaAsset[]
+
+  @@unique([tenantId, name]) // unique name within a tenant
+  @@index([tenantId])
+}
+
+/// Users are authenticated by Clerk; we store a local row to join RBAC & domain data.
+model User {
+  id          String   @id @default(uuid()) @db.Uuid
+  clerkUserId String   @unique
+  email       String   @unique
+  name        String?
+  avatarUrl   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  memberships  Membership[]
+  activityLogs ActivityLog[]
+  generations  Generation[]
+  posts        Post[]        @relation("PostCreatedBy")
+  mediaAssets  MediaAsset[]  @relation("MediaUploadedBy")
+  Invitation   Invitation[]
+  Campaign     Campaign[]
+}
+
+/// Tenant<->User membership with role
+model Membership {
+  id        String   @id @default(uuid()) @db.Uuid
+  tenantId  String   @db.Uuid
+  userId    String   @db.Uuid
+  role      Role     @default(VIEWER)
+  createdAt DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, userId])
+  @@index([userId])
+  @@index([tenantId, role])
+}
+
+/// Invitations to a tenant (optional quality-of-life)
+model Invitation {
+  id        String    @id @default(uuid()) @db.Uuid
+  tenantId  String    @db.Uuid
+  email     String
+  role      Role      @default(EDITOR)
+  token     String    @unique
+  status    String    @default("pending") // pending, accepted, expired
+  invitedBy String?   @db.Uuid
+  createdAt DateTime  @default(now())
+  expiresAt DateTime?
+
+  tenant        Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  invitedByUser User?  @relation(fields: [invitedBy], references: [id], onDelete: SetNull)
+
+  @@index([tenantId])
+  @@index([email])
+}
+
+/// ---------- SOCIAL INTEGRATIONS ----------
+model SocialAccount {
+  id             String         @id @default(uuid()) @db.Uuid
+  tenantId       String         @db.Uuid
+  provider       SocialProvider
+  handle         String
+  externalId     String // platform account/page id
+  accessToken    Bytes? // store encrypted bytes (app-level encryption)
+  refreshToken   Bytes?
+  tokenExpiresAt DateTime?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  tenant         Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  posts          Post[]
+  AnalyticsPoint AnalyticsPoint[]
+
+  @@unique([tenantId, provider, externalId]) // prevent duplicates
+  @@index([tenantId, provider])
+}
+
+/// ---------- CAMPAIGNS & CONTENT ----------
+model Campaign {
+  id          String    @id @default(uuid()) @db.Uuid
+  tenantId    String    @db.Uuid
+  workspaceId String?   @db.Uuid
+  name        String
+  description String?
+  startDate   DateTime?
+  endDate     DateTime?
+  createdBy   String?   @db.Uuid
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  tenant    Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  workspace Workspace? @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+  creator   User?      @relation(fields: [createdBy], references: [id], onDelete: SetNull)
+
+  campaignPosts CampaignPost[]
+  posts         Post[]
+
+  @@index([tenantId, startDate])
+  @@index([tenantId, name])
+}
+
+model CampaignPost {
+  // junction table for many-to-many Campaign <-> Post
+  campaignId String @db.Uuid
+  postId     String @db.Uuid
+
+  campaign Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  post     Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@id([campaignId, postId])
+  @@index([postId])
+}
+
+model Post {
+  id              String     @id @default(uuid()) @db.Uuid
+  tenantId        String     @db.Uuid
+  workspaceId     String?    @db.Uuid
+  socialAccountId String?    @db.Uuid
+  status          PostStatus @default(DRAFT)
+  content         String? // caption/body
+  aiNotes         String? // “why this was generated,” prompt summary, etc.
+  scheduledAt     DateTime?
+  publishedAt     DateTime?
+  createdBy       String?    @db.Uuid
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+  deletedAt       DateTime?
+
+  tenant        Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  workspace     Workspace?     @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+  socialAccount SocialAccount? @relation(fields: [socialAccountId], references: [id], onDelete: SetNull)
+  creator       User?          @relation("PostCreatedBy", fields: [createdBy], references: [id], onDelete: SetNull)
+
+  postMedia     PostMedia[]
+  analytics     AnalyticsPoint[]
+  campaignLinks CampaignPost[]
+  Campaign      Campaign?        @relation(fields: [campaignId], references: [id])
+  campaignId    String?          @db.Uuid
+
+  @@index([tenantId, status])
+  @@index([tenantId, scheduledAt])
+  @@index([tenantId, socialAccountId])
+}
+
+model MediaAsset {
+  id          String   @id @default(uuid()) @db.Uuid
+  tenantId    String   @db.Uuid
+  workspaceId String?  @db.Uuid
+  url         String
+  mimeType    String?
+  width       Int?
+  height      Int?
+  uploadedBy  String?  @db.Uuid
+  createdAt   DateTime @default(now())
+
+  tenant    Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  workspace Workspace? @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+  uploader  User?      @relation("MediaUploadedBy", fields: [uploadedBy], references: [id], onDelete: SetNull)
+
+  postLinks PostMedia[]
+
+  @@index([tenantId])
+  @@index([workspaceId])
+}
+
+model PostMedia {
+  // junction table for Post <-> MediaAsset (post can have multiple media)
+  postId  String  @db.Uuid
+  mediaId String  @db.Uuid
+  order   Int     @default(0) // for carousels
+  alt     String?
+
+  post  Post       @relation(fields: [postId], references: [id], onDelete: Cascade)
+  media MediaAsset @relation(fields: [mediaId], references: [id], onDelete: Cascade)
+
+  @@id([postId, mediaId])
+  @@index([mediaId])
+}
+
+/// ---------- AI GENERATIONS ----------
+model Generation {
+  id          String         @id @default(uuid()) @db.Uuid
+  tenantId    String         @db.Uuid
+  createdBy   String?        @db.Uuid
+  type        GenerationType
+  provider    ModelProvider  @default(OPENAI)
+  model       String? // e.g., "gpt-4o", "gemini-1.5-pro"
+  prompt      String
+  result      String? // text JSON blob or summarized output
+  costCredits Int            @default(0)
+  createdAt   DateTime       @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user   User?  @relation(fields: [createdBy], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, type, createdAt])
+}
+
+/// ---------- ANALYTICS ----------
+model AnalyticsPoint {
+  id              String     @id @default(uuid()) @db.Uuid
+  tenantId        String     @db.Uuid
+  postId          String?    @db.Uuid
+  socialAccountId String?    @db.Uuid
+  metric          MetricType
+  value           Float
+  recordedAt      DateTime   @default(now())
+
+  tenant        Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  post          Post?          @relation(fields: [postId], references: [id], onDelete: Cascade)
+  socialAccount SocialAccount? @relation(fields: [socialAccountId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, recordedAt])
+  @@index([postId, metric])
+  @@index([socialAccountId, metric])
+}
+
+/// ---------- CREDITS / BILLING ----------
+model CreditLedger {
+  id          String          @id @default(uuid()) @db.Uuid
+  tenantId    String          @db.Uuid
+  eventType   CreditEventType
+  amount      Int // positive (grant/refund) or negative (consume/expire)
+  reason      String?
+  createdAt   DateTime        @default(now())
+  referenceId String? // link to generation/post/etc.
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, createdAt])
+}
+
+model ApiKey {
+  id         String    @id @default(uuid()) @db.Uuid
+  tenantId   String    @db.Uuid
+  name       String
+  hashedKey  String // store only hashed API key
+  createdAt  DateTime  @default(now())
+  lastUsedAt DateTime?
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, name])
+  @@index([tenantId, lastUsedAt])
+}
+
+/// ---------- AUDIT ----------
+model ActivityLog {
+  id        String   @id @default(uuid()) @db.Uuid
+  tenantId  String   @db.Uuid
+  userId    String?  @db.Uuid
+  action    String // e.g., "post.create", "campaign.update", "auth.login"
+  details   Json?
+  createdAt DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user   User?  @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, createdAt])
+  @@index([tenantId, action])
+}
