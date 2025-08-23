@@ -1,13 +1,19 @@
 "use client";
 
-import React from "react";
+import React, { useEffect } from "react";
 import Image from "next/image";
 import { SignedOut, SignInButton } from "@clerk/nextjs";
 import { Button } from "./ui/button";
 import { SignedIn, UserButton } from "@clerk/clerk-react";
 import { GitHubLogoIcon } from "@radix-ui/react-icons";
+import { checkUser } from "@/actions/checkUser";
 
 const Header = () => {
+  useEffect(() => {
+    (async () => {
+      await checkUser(); // triggers on mount, not during SSR
+    })();
+  }, []);
   return (
     <header className="sticky top-0 z-40 w-full border-b bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-3">
