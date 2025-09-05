@@ -79,11 +79,11 @@ export default function LandingPage() {
               animate="show"
               className="space-y-6"
             >
-              <motion.div variants={item}>
+              <motion.div variants={item as any}>
                 <Pill>AI for high-velocity brand teams</Pill>
               </motion.div>
               <motion.h1
-                variants={item}
+                variants={item as any}
                 className="text-5xl font-extrabold leading-[1.1] md:text-6xl"
               >
                 Create, orchestrate & scale{" "}
@@ -93,13 +93,13 @@ export default function LandingPage() {
                 at lightspeed.
               </motion.h1>
               <motion.p
-                variants={item}
+                variants={item as any}
                 className="max-w-xl text-lg text-muted-foreground"
               >
                 BrandFlow is your AI-powered content studio: ideate, design,
                 approve, schedule, and learn — all in one seamless flow.
               </motion.p>
-              <motion.div variants={item} className="flex gap-3 pt-2">
+              <motion.div variants={item as any} className="flex gap-3 pt-2">
                 <Button size="lg" asChild>
                   <a href="#get-started">
                     Try it free
@@ -233,7 +233,7 @@ export default function LandingPage() {
             className="mt-12 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3"
           >
             {FEATURES.map((f, i) => (
-              <motion.div key={i} variants={item}>
+              <motion.div key={i} variants={item as any}>
                 <TiltCard className="h-full">
                   <div className="h-full border bg-card/80 shadow-md backdrop-blur transition hover:shadow-xl">
                     <div className="p-6">
@@ -367,7 +367,7 @@ export default function LandingPage() {
             className="mx-auto mt-12 grid max-w-6xl grid-cols-1 gap-6 md:grid-cols-3"
           >
             {TESTIMONIALS.map((t, i) => (
-              <motion.div key={i} variants={item}>
+              <motion.div key={i} variants={item as any}>
                 <div className="border bg-card/70 shadow-sm backdrop-blur transition hover:shadow-lg rounded-xl p-6">
                   <p className="text-sm italic leading-relaxed">“{t.quote}”</p>
                   <div className="mt-6 flex items-center gap-3">
