@@ -1,6 +1,5 @@
 "use client";
-
-import React, { useEffect } from "react";
+import React, { useEffect, } from "react";
 import Image from "next/image";
 import { SignedOut, SignInButton } from "@clerk/nextjs";
 import { Button } from "./ui/button";
@@ -21,6 +20,7 @@ const Header = () => {
     { href: "/posts", label: "Posts" },
     { href: "/calendar", label: "Calendar" },
     { href: "/analytics", label: "Analytics" },
+    { href: "/billing", label: "Billing" },
   ];
 
   useEffect(() => {
@@ -78,7 +78,9 @@ const Header = () => {
 
           <SignedIn>
             <div className="flex items-center gap-2">
-              <Bell className="size-4" />
+              <Link href= '/notification' >
+              <Bell  className="size-4 " />
+              </Link>
             </div>
             <UserButton
               appearance={{

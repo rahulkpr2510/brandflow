@@ -4,6 +4,7 @@ import "./globals.css";
 import { ClerkProvider } from "@clerk/nextjs";
 import { ThemeProvider } from "@/components/theme-provider";
 import { dark } from "@clerk/themes";
+import Header from "@/components/header";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -34,7 +35,10 @@ export default function RootLayout({
             enableSystem
             disableTransitionOnChange
           >
-            <main className="min-h-screen">{children}</main>
+            <main className="min-h-screen">
+              <Header/>
+              {children}
+              </main>
           </ThemeProvider>
         </body>
       </html>
