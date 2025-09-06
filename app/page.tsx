@@ -1,12 +1,10 @@
 import React from 'react'
-import LandingPage from './LandingPage/page'
-import Header from '@/components/header'
+import LandingPage from '../components/LandingPage';
 
 
 const page = () => {
   return (
     <>
-    
     <LandingPage />
     </>
   )
